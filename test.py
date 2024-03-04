@@ -3,13 +3,16 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.chains import LLMChain
 from langchain.callbacks.base import BaseCallbackHandler
 from dotenv import load_dotenv
+from queue import Queue
 
 load_dotenv()
+
+queue = Queue()
 
 
 class StreamingHandler(BaseCallbackHandler):
     def on_llm_new_token(self, token, **kwargs):
-        print(token)
+        queue.put(token)
 
 
 # Controls how OpenAI responds to Langchain
@@ -21,10 +24,8 @@ prompt = ChatPromptTemplate.from_messages([("human", "{content}")])
 
 # LLMChain will not stream the response, even with the stream method
 # You must override the stream method if you want streaming
-chain = LLMChain(llm=chat, prompt=prompt)
+# chain = LLMChain(llm=chat, prompt=prompt)
 
-output = chain.stream(input={"content": "tell me a joke"})
-print(output)
 
 # messages = prompt.format_messages(content="tell me a joke")
 #
@@ -36,3 +37,19 @@ print(output)
 # # outputs a generator
 # for message in chat.stream(messages):
 #     print(message.content)
+
+
+# To get streaming to work we subclass it and override the stream
+# method
+class StreamingChain(LLMChain):
+    def stream(self, input):
+        self(input)
+        while True:
+            token = queue.get()
+            yield token
+
+
+chain = StreamingChain(llm=chat, prompt=prompt)
+
+for output in chain.stream(input={"content": "tell me a joke"}):
+    print(output)
