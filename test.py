@@ -15,6 +15,13 @@ class StreamingHandler(BaseCallbackHandler):
     def on_llm_new_token(self, token, **kwargs):
         queue.put(token)
 
+    def on_llm_end(self, response, **kwargs):
+        queue.put(None)
+
+    def on_llm_error(self, error, **kwargs):
+        print(f"There was an error {error}")
+        queue.put(None)
+
 
 # Controls how OpenAI responds to Langchain
 # This will make OpenAI to stream to Langchain but we
@@ -52,6 +59,8 @@ class StreamingChain(LLMChain):
 
         while True:
             token = queue.get()
+            if token is None:
+                break
             yield token
 
 
