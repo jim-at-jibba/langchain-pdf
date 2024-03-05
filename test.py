@@ -6,27 +6,29 @@ from dotenv import load_dotenv
 from queue import Queue
 from threading import Thread
 
-load_dotenv()
 
-queue = Queue()
+load_dotenv()
 
 
 class StreamingHandler(BaseCallbackHandler):
+    def __init__(self, queue):
+        self.queue = queue
+
     def on_llm_new_token(self, token, **kwargs):
-        queue.put(token)
+        self.queue.put(token)
 
     def on_llm_end(self, response, **kwargs):
-        queue.put(None)
+        self.queue.put(None)
 
     def on_llm_error(self, error, **kwargs):
         print(f"There was an error {error}")
-        queue.put(None)
+        self.queue.put(None)
 
 
 # Controls how OpenAI responds to Langchain
 # This will make OpenAI to stream to Langchain but we
 # wont see anything as Langchain does not stream becasue of this flag
-chat = ChatOpenAI(streaming=True, callbacks=[StreamingHandler()])
+chat = ChatOpenAI(streaming=True)
 
 prompt = ChatPromptTemplate.from_messages([("human", "{content}")])
 
@@ -51,8 +53,13 @@ prompt = ChatPromptTemplate.from_messages([("human", "{content}")])
 # method
 class StreamingChain(LLMChain):
     def stream(self, input):
+        queue = Queue()
+        handler = StreamingHandler(queue)
+
         def task():
-            self(input)
+            # Assign our callbacks when calling our chain
+            # with the user scoped handler
+            self(input, callbacks=[handler])
 
         # Start this in parallel on separate thread
         Thread(target=task).start()
